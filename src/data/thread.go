@@ -47,6 +47,7 @@ func (thread *Thread) Posts() (posts []Post, err error) {
 	return
 }
 
+// 获取所有道thread
 func Threads() (threads []Thread, err error) {
 	rows, err := Db.Query("SELECT id, uuid, topic, user_id, created_at FROM threads ORDER BY created_at DESC")
 	if err != nil {
@@ -63,6 +64,7 @@ func Threads() (threads []Thread, err error) {
 	return
 }
 
+//根据uuid获取Thread
 func ThreadByUUID(uuid string) (conv Thread, err error) {
 	conv = Thread{}
 	err = Db.QueryRow("SELECT id, uuid, topic, user_id, created_at FROM threads WHERE uuid = $1", uuid).
