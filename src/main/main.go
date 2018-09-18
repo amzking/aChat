@@ -13,11 +13,21 @@ func main() {
 
 	// 路由
 	mux.HandleFunc("/", index)
-	mux.Handler("/authenticate", authenticate)
+
+	mux.HandleFunc("/err", err)
+
+	// defined in route_auth.go
+	mux.HandleFunc("/login", login)
+	mux.HandleFunc("/logout", logout)
+	mux.HandleFunc("/signup", signup)
+	mux.HandleFunc("/signup_account", signupAccount)
+
+	mux.HandleFunc("/authenticate", authenticate)
 
 	server := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:           "0.0.0.0:8080",
+		Handler:        mux,
+		MaxHeaderBytes: 1 << 20,
 	}
 	server.ListenAndServe()
 }

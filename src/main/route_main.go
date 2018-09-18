@@ -2,53 +2,96 @@ package main
 
 import (
 	"aChat/src/data"
-	"html/template"
 	"net/http"
 )
 
-func index(w http.ResponseWriter, r *http.Request) {
-	threads, err := data.Threads()
-	if err == nil {
-		_, err = session(w, r)
-
-		public_tmpl_files := []string{
-			"templates/layout.html",
-			"templates/public.navbar.html",
-			"templates/index.html"}
-
-		private_tmpl_files := []string{
-			"templates/layout.html",
-			"templates/private.navbar.html",
-			"templates/index.html"}
-		var templates *template.Template
-		if err != nil {
-			templates = template.Must(template.ParseFiles(private_tmpl_files...))
-		} else {
-			templates = template.Must(template.ParseFiles(public_tmpl_files...))
-		}
-		templates.ExecuteTemplate(w, "layout", threads)
+func err(writer http.ResponseWriter, request *http.Request) {
+	vals := request.URL.Query()
+	_, err := session(writer, request)
+	if err != nil {
+		generateHTML(writer, vals.Get("msg"), "layout", "public.navbar", "error")
+	} else {
+		generateHTML(writer, vals.Get("msg"), "layout", "private.navbar", "error")
 	}
-
 }
 
-func authenticate(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	user, err := data.UserByEmail(r.PostFormValue("email"))
-	if err == nil {
-		return
+func index(writer http.ResponseWriter, request *http.Request) {
+	threads, err := data.Threads()
+	if err != nil {
+		error_message(writer, request, "Cannot get threads")
+	} else {
+		_, err := session(writer, request)
+		if err != nil {
+			generateHTML(writer, threads, "layout", "public.navbar", "index")
+		} else {
+			generateHTML(writer, threads, "layout", "private.navbar", "index")
+		}
 	}
+}
 
-	if user.Password == data.Encrypt(r.PostFormValue("password")) {
-		session, _ := user.CreateSession()
+func login(writer http.ResponseWriter, request *http.Request) {
+	t := parseTemplateFiles("login.layout", "public.navbar", "login")
+	t.Execute(writer, nil)
+}
+
+// GET /signup
+// Show the signup page
+func signup(writer http.ResponseWriter, request *http.Request) {
+	generateHTML(writer, nil, "login.layout", "public.navbar", "signup")
+}
+
+// POST /signup
+// Create the user account
+func signupAccount(writer http.ResponseWriter, request *http.Request) {
+	err := request.ParseForm()
+	if err != nil {
+		danger(err, "Cannot parse form")
+	}
+	user := data.User{
+		Name:     request.PostFormValue("name"),
+		Email:    request.PostFormValue("email"),
+		Password: request.PostFormValue("password"),
+	}
+	if err := user.Create(); err != nil {
+		danger(err, "Cannot create user")
+	}
+	http.Redirect(writer, request, "/login", 302)
+}
+
+// POST /authenticate
+// Authenticate the user given the email and password
+func authenticate(writer http.ResponseWriter, request *http.Request) {
+	err := request.ParseForm()
+	user, err := data.UserByEmail(request.PostFormValue("email"))
+	if err != nil {
+		danger(err, "Cannot find user")
+	}
+	if user.Password == data.Encrypt(request.PostFormValue("password")) {
+		session, err := user.CreateSession()
+		if err != nil {
+			danger(err, "Cannot create session")
+		}
 		cookie := http.Cookie{
 			Name:     "_cookie",
 			Value:    session.Uuid,
 			HttpOnly: true,
 		}
-		http.SetCookie(w, &cookie)
-		http.Redirect(w, r, "/", 302)
+		http.SetCookie(writer, &cookie)
+		http.Redirect(writer, request, "/", 302)
 	} else {
-		http.Redirect(w, r, "/login", 302)
+		http.Redirect(writer, request, "/login", 302)
 	}
 
+}
+
+// GET /logout
+// Logs the user out
+func logout(writer http.ResponseWriter, request *http.Request) {
+	cookie, err := request.Cookie("_cookie")
+	if err != http.ErrNoCookie {
+		warning(err, "Failed to get cookie")
+		session := data.Session{Uuid: cookie.Value}
+		session.DeleteByUUID()
+	}
+	http.Redirect(writer, request, "/", 302)
 }
